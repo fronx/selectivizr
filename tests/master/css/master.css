@@ -137,6 +137,33 @@ without using the '+' combinator so they run in IE6 */
 	background:#0c0
 }
 
+/* pseudo-element tests
+------------------------------------------------------------------------------------ */
+#pseudo-before-text ,
+#pseudo-after-text {
+  border: 1px #666 solid;
+  border-width: 1px 0;
+  background: #c00;
+  position: relative;
+  text-indent: 5px;
+ }
+
+#pseudo-before-text:before,
+#pseudo-after-text:after
+{
+  display: block;
+  position: absolute;
+  width: 100%;
+  top: 0;
+  left: 0;
+  content: ':before PASSED';
+  background-color: #0c0;
+}
+#pseudo-after-text:after
+{
+  content: ':after PASSED';
+}
+
 
 /* misc
 ------------------------------------------------------------------------------------ */
