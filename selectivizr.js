@@ -73,7 +73,7 @@ References:
 	var RE_ASSET_URL 						= /\burl\(\s*(["']?)(?!data:)([^"')]+)\1\s*\)/g;
 	var RE_PSEUDO_STRUCTURAL				= /^:(empty|(first|last|only|nth(-last)?)-(child|of-type))$/;
 	var RE_PSEUDO_ELEMENTS					= /:(:first-(?:line|letter))/g;
-	var RE_SELECTOR_GROUP					= /(^|})\s*([^\{]*?[\[:][^{]+)/g;
+	var RE_SELECTOR_GROUP					= /(^|})\s*([^\{]*?[\[:][^{]+)/g; // need to edit to also parse "content" attribute.
 	var RE_SELECTOR_PARSE					= /([ +~>])|(:[a-z-]+(?:\(.*?\)+)?)|(\[.*?\])/g; 
 	var RE_LIBRARY_INCOMPATIBLE_PSEUDOS		= /(:not\()?:(hover|enabled|disabled|focus|checked|target|active|visited|first-line|first-letter)\)?/g;
 	var RE_PATCH_CLASS_NAME_REPLACE			= /[^\w-]/g;
@@ -103,7 +103,7 @@ References:
 	// creates one or more patches for each matched selector.
 	function patchStyleSheet( cssText ) {
 		return cssText.replace(RE_PSEUDO_ELEMENTS, PLACEHOLDER_STRING).
-			replace(RE_SELECTOR_GROUP, function(m, prefix, selectorText) {	
+			replace(RE_SELECTOR_GROUP, function(m, prefix, selectorText, genContent) {	
     			var selectorGroups = selectorText.split(",");
     			for (var c = 0, cs = selectorGroups.length; c < cs; c++) {
     				var selector = normalizeSelectorWhitespace(selectorGroups[c]) + SPACE_STRING;
@@ -120,9 +120,14 @@ References:
     						else {
     							var patch = (pseudo) ? patchPseudoClass( pseudo ) : patchAttribute( attribute );
     							if (patch) {
-    								patches.push(patch);
-    								return "." + patch.className;
-    							}
+    							  patch.genContent = genContent || '';
+    							  patches.push(patch);
+    								if (patch.injectSpan === false) {
+    								  return "." + patch.className;
+    								} else {
+    								  return " span." + patch.className;
+  								  }
+								  }
     							return match;
     						}
     					}
@@ -148,6 +153,8 @@ References:
 		var isNegated = pseudo.substring(0, 5) == ":not(";
 		var activateEventName;
 		var deactivateEventName;
+		var before = false;
+		var injectSpan = false;
 
 		// if negated, remove :not() 
 		if (isNegated) {
@@ -240,6 +247,26 @@ References:
 					}
 					break;
 					
+				case "before":
+				  before = true;
+				  // intentional fall-through
+				  
+				case "after":
+				  applyClass = false;
+				  injectSpan = function(e, content) {
+				    content = content || '';
+				    if (e.originalHTML === undefined) {
+				      e.originalHTML = e.innerHTML;
+				    }
+				    if (before === true) {
+				      e.innerHTML = '<span class="'+className+'">'+content+'</span>' + e.originalHTML;
+				    } else {
+				      e.innerHTML = e.originalHTML + '<span class="'+className+'">'+content+'</span>';
+				    }
+				    return true;
+				  };
+				  break;
+					
 				// everything else
 				default:
 					// If we don't support this pseudo-class don't create 
@@ -250,7 +277,7 @@ References:
 					break;
 			}
 		}
-		return { className: className, applyClass: applyClass };
+		return { className: className, applyClass: applyClass, injectSpan: injectSpan };
 	};
 
 	// --[ applyPatches() ]-------------------------------------------------
@@ -289,6 +316,9 @@ References:
 					if (!hasPatch(elm, patch)) {
 						if (patch.applyClass && (patch.applyClass === true || patch.applyClass(elm) === true)) {
 							cssClasses = toggleClass(cssClasses, patch.className, true );
+						}
+						if (typeof patch.injectSpan == "function") {
+						  patch.injectSpan(elm,patch.genContent);
 						}
 					}
 				}
